@@ -114,10 +114,26 @@ public class OrganizationSwitchGrant extends AbstractAuthorizationGrantHandler {
                 // If the user bound to the token is a federated user and the user is authenticated via
                 // OrganizationLogin Authenticator accessing the organization_switch grant, the user ID is populated
                 // as the username.
-                userId = authorizedUser.getUserName();
+                if (authorizedUser.getUserName().split("@").length > 1) {
+                    userId = authorizedUser.getUserName().split("@")[0];
+                    if (userId.contains("/")) {
+                        userId = userId.split("/")[1];
+                    }
+                    Optional<org.wso2.carbon.user.core.common.User> optionalUser =
+                            getFederatedUserFromResidentOrganization(null, userId, organizationId);
+                    if (optionalUser.isPresent()) {
+                        authenticatedUser.setUserName(optionalUser.get().getUsername());
+                        authenticatedUser.setUserStoreDomain(optionalUser.get().getUserStoreDomain());
+                        authenticatedUser.setAuthenticatedSubjectIdentifier(optionalUser.get().getUserStoreDomain() +
+                                "/" +optionalUser.get().getUsername() +
+                                TENANT_DOMAIN_COMBINER + authenticatedUser.getTenantDomain());
+                    }
+                } else {
+                    userId = authorizedUser.getUserName();
+                }
             } else {
                 Optional<org.wso2.carbon.user.core.common.User> optionalUser =
-                        getFederatedUserFromResidentOrganization(authorizedUser.getUserName(), organizationId);
+                        getFederatedUserFromResidentOrganization(authorizedUser.getUserName(), null, organizationId);
                 if (optionalUser.isPresent()) {
                     userId = optionalUser.get().getUserID();
                     authenticatedUser.setUserStoreDomain(optionalUser.get().getUserStoreDomain());
@@ -231,12 +247,13 @@ public class OrganizationSwitchGrant extends AbstractAuthorizationGrantHandler {
     }
 
     private Optional<org.wso2.carbon.user.core.common.User> getFederatedUserFromResidentOrganization(String username,
+                                                                                                     String userId,
                                                                                                      String organizationId)
             throws OrganizationSwitchGrantServerException {
 
         try {
             return OrganizationSwitchGrantDataHolder.getInstance().getOrganizationUserResidentResolverService()
-                    .resolveUserFromResidentOrganization(username, null, organizationId);
+                    .resolveUserFromResidentOrganization(username, userId, organizationId);
         } catch (OrganizationManagementException e) {
             throw OrganizationSwitchGrantUtil.handleServerException(ERROR_CODE_ERROR_RETRIEVING_AUTHENTICATED_USER, e);
         }
